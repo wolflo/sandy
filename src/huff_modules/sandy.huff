@@ -1,21 +1,38 @@
 // stack: [ bottom top ]
 
-// function signature - sandyRuntime()
-#define macro GET_RUNTIME_SIG = takes(0) returns(1) {
-  0x799897e5
-}
+// huff TODOs:
+  // - bytes interpreted as opcodes if push > 32 bytes
+  // - should push1 when jumpdest fits in a byte
+  // - need a __PUSHBYTES(macro, ost) to push the code from a macro onto stack
 
-template <throw_dest>
+// func_sig("sandyRuntime()")
+#define macro GET_RUNTIME_SIG = takes(0) returns(1) { 0x799897e5 }
+
+template <throw_dst>
 #define macro CHECK_SUCCESS = takes(1) returns(0) {
   // [ call_success ]
   iszero
-  <throw_dest>
+  <throw_dst>
   jumpi
 }
 
-// TODO: could have an optimization by not expanding an extra word of memory
+// TODO: this is manual and sketchy
+// todo: confirm we zero out func sig here (mem bytes 28-32)
+#define macro STORE_KILL_PREFIX = takes(0) returns(1) {
+  0x6004361460003560e01c6341c0e1b51473  // head of kill prefix, 17 bytes
+  0x00 mstore
+
+  caller 0x60 shl // shift left 12 bytes (96 bits, 0x60)
+  0x11 mstore  // mstore caller at 17 byte offset
+
+  // tail of prefix
+  0x33141616156100305733ff5b  // tail of kill prefix, 12 bytes
+  0x25 mstore // mstore at 17 + 20 = 37 byte offset, 0x25
+  0x31 // 37 + 12 = 49 bytes, 0x31
+}
+
+
 #define macro MAIN = takes(0) returns(0) {
-  // [ ]
   // mstore(key, value)
   0x00 dup1 dup1 GET_RUNTIME_SIG() dup2 mstore // [ 00 00 00 ]
   0x04  0x1c // len(func_sig) (28 byte offset)
@@ -23,15 +40,22 @@ template <throw_dest>
   call  // call(gas, addr, val, argOst, argLen, retOst, retLen)
 
   // [ 00 success ]
-  CHECK_SUCCESS<throw_dest>() // [ 00 ]
-  0x20 returndatasize dup1 swap3 dup3 // [ rtd_len x20 rtd_len 00 x20 ]
-  // returndatacopy(dstOst, ost, len)(x20, 00, returndatasize)
-  returndatacopy
+  CHECK_SUCCESS<throw_dst>() // [ 00 ]
 
-  // [ rtd_len x20 ]
-  return // return(ost, len)
+  // ** prefix len currently used as ost to end of prefix as well
+  // store kill prefix
+  STORE_KILL_PREFIX() // [ 00 prefix_len ]
 
 
-  throw_dest:
+// [ 00 prefix_len rtd_len rtd_len ]
+// [ 00 prefix_len rtd_len rtd_len 00 prefix_len ]
+  returndatasize dup1 dup4 dup4
+  // returndatacopy(dstOst, ost, len)(prefix_len, 00, rtd_len)
+  returndatacopy  // [ 00 prefix_len rtd_len ]
+
+  // [ (rtd_len + prefix_len) 00 ]
+  add swap1 return // return(ost, len)(prefix_len + rtd_len, 00)
+
+  throw_dst:
     0x00 dup1 revert
 }
