@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const parser = require('../huff/src/parser');
-const compiler = require('../huff/src/compiler');
+const parser = require('./huff/src/parser');
+const compiler = require('./huff/src/compiler');
 
 const modulesPath = path.posix.resolve(__dirname, './huff_modules');
 const OUT_PATH = '../out/';
