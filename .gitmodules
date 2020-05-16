@@ -1,0 +1,3 @@
+[submodule "huff"]
+	path = huff
+	url = git@github.com:AztecProtocol/huff.git
