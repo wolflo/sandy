@@ -1,6 +1,37 @@
 // stack: [ bottom top ]
 
+// function signature - sandyRuntime()
+#define macro GET_RUNTIME_SIG = takes(0) returns(1) {
+  0x799897e5
+}
+
+template <throw_dest>
+#define macro CHECK_SUCCESS = takes(1) returns(0) {
+  // [ call_success ]
+  iszero
+  <throw_dest>
+  jumpi
+}
+
+// TODO: could have an optimization by not expanding an extra word of memory
 #define macro MAIN = takes(0) returns(0) {
-    // [ ]
-    0x00 dup1 return
+  // [ ]
+  // mstore(key, value)
+  0x00 dup1 dup1 GET_RUNTIME_SIG() dup2 mstore // [ 00 00 00 ]
+  0x04  0x1c // len(func_sig) (28 byte offset)
+  dup3 caller gas // [ 00 00 00 04 28 00 caller gas ]
+  call  // call(gas, addr, val, argOst, argLen, retOst, retLen)
+
+  // [ 00 success ]
+  CHECK_SUCCESS<throw_dest>() // [ 00 ]
+  0x20 returndatasize dup1 swap3 dup3 // [ rtd_len x20 rtd_len 00 x20 ]
+  // returndatacopy(dstOst, ost, len)(x20, 00, returndatasize)
+  returndatacopy
+
+  // [ rtd_len x20 ]
+  return // return(ost, len)
+
+
+  throw_dest:
+    0x00 dup1 revert
 }
