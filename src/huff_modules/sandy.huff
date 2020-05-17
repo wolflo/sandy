@@ -1,40 +1,50 @@
+// #include "./kill_prefix.huff"
+
 // stack: [ bottom top ]
 
 // huff TODOs:
   // - bytes interpreted as opcodes if push > 32 bytes
   // - should push1 when jumpdest fits in a byte
   // - need a __PUSHBYTES(macro, ost) to push the code from a macro onto stack
+  // - need outside of the bytecode asserts (e.g. if this macro changed length, don't compile)
+  // - whitespace would be nice
+  // - order of operations in liteal arithmetic
 
 // func_sig("sandyRuntime()")
-#define macro GET_RUNTIME_SIG = takes(0) returns(1) { 0x799897e5 }
+#define macro CALLBACK_SIG = takes(0) returns(1) { 0x799897e5 }
+
+// huff hack
+template <literal>
+#define macro PUSH_VAL = takes(0) returns(1) {
+  <literal>
+}
 
 template <throw_dst>
 #define macro CHECK_SUCCESS = takes(1) returns(0) {
   // [ call_success ]
-  iszero
-  <throw_dst>
-  jumpi
+  iszero <throw_dst> jumpi
 }
 
-// TODO: this is manual and sketchy
-// todo: confirm we zero out func sig here (mem bytes 28-32)
-#define macro STORE_KILL_PREFIX = takes(0) returns(1) {
-  0x6004361460003560e01c6341c0e1b51473  // head of kill prefix, 17 bytes
+// TODO: add offsets as we go rather than pushing
+template <prefix_head, prefix_tail, prefix_head_len, prefix_tail_len>
+#define macro MSTORE_PREFIX = takes(0) returns(1) {
+  // 0x6004361460003560e01c6341c0e1b51473  // head of kill prefix, 17 bytes
+  <prefix_head> PUSH_VAL<8*32-8*prefix_head_len>() shl
   0x00 mstore
 
   caller 0x60 shl // shift left 12 bytes (96 bits, 0x60)
-  0x11 mstore  // mstore caller at 17 byte offset
+  <prefix_head_len> mstore   // mstore caller at ost of end of prefix head
 
-  // tail of prefix
-  0x33141616156100305733ff5b  // tail of kill prefix, 12 bytes
-  0x25 mstore // mstore at 17 + 20 = 37 byte offset, 0x25
-  0x31 // 37 + 12 = 49 bytes, 0x31
+  // 0x33141616156100305733ff5b  // tail of kill prefix, 12 bytes
+  // mstore // mstore prefix_tail at prefix_head_len + 20 byte address
+  <prefix_tail> PUSH_VAL<8*32-8*prefix_tail_len>() shl
+  PUSH_VAL<prefix_head_len+20>() mstore
 }
 
-
+template <prefix_head, prefix_head_len, prefix_tail, prefix_tail_len>
 #define macro MAIN = takes(0) returns(0) {
   // mstore(key, value)
-  0x00 dup1 dup1 GET_RUNTIME_SIG() dup2 mstore // [ 00 00 00 ]
+  0x00 dup1 dup1 CALLBACK_SIG() dup2 mstore // [ 00 00 00 ]
   0x04  0x1c // len(func_sig) (28 byte offset)
   dup3 caller gas // [ 00 00 00 04 28 00 caller gas ]
   call  // call(gas, addr, val, argOst, argLen, retOst, retLen)
@@ -42,20 +52,18 @@ template <throw_dst>
   // [ 00 success ]
   CHECK_SUCCESS<throw_dst>() // [ 00 ]
 
-  // ** prefix len currently used as ost to end of prefix as well
   // store kill prefix
-  STORE_KILL_PREFIX() // [ 00 prefix_len ]
+  MSTORE_PREFIX<prefix_head, prefix_tail, prefix_head_len, prefix_tail_len>()
+  PUSH_VAL<prefix_head_len+prefix_tail_len+20>() // [ 00 prefix_len ]
 
-
-// [ 00 prefix_len rtd_len rtd_len ]
-// [ 00 prefix_len rtd_len rtd_len 00 prefix_len ]
-  returndatasize dup1 dup4 dup4
+  returndatasize dup1 dup4 dup4 // [ 00 prefix_len rtd_len rtd_len 00 prefix_len ]
   // returndatacopy(dstOst, ost, len)(prefix_len, 00, rtd_len)
   returndatacopy  // [ 00 prefix_len rtd_len ]
 
   // [ (rtd_len + prefix_len) 00 ]
   add swap1 return // return(ost, len)(prefix_len + rtd_len, 00)
 
+  // [ 00 ]
   throw_dst:
-    0x00 dup1 revert
+    dup1 revert
 }

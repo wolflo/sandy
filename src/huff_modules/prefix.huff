@@ -1,0 +1,61 @@
+// Note that PREFIX_HEAD is a partial macro. It ends with a 73 PUSH20 op
+// that contains no data, meaning there must be 20 bytes of data appended to it.
+// The kill prefix consists of:
+// PREFIX_HEAD + ${authorized_address} + PREFIX_TAIL
+// where authorized_address is the address that can trigger selfdestruct
+
+#define macro LEN_PREFIX_HEAD = takes(0) returns(1) {
+  0x11
+}
+
+#define macro PUSH_PREFIX_HEAD = takes(0) returns (1) {
+  0x6004361460003560e01c6341c0e1b51473
+}
+
+#define macro LEN_PREFIX_TAIL = takes(0) returns(1) {
+  0x0c
+}
+
+#define macro PUSH_PREFIX_TAIL = takes(0) returns (1) {
+  0x331416161561000b5733ff5b
+}
+
+// func_sig("kill()")
+#define macro KILL_SIG = takes(0) returns(1) { 0x41c0e1b5 }
+
+#define macro PREFIX_HEAD = takes(0) returns(4) {
+  // check calldatasize == 4 (adds 4 bytes)
+  0x04 calldatasize eq
+
+  // check calldata == func_sig("kill()")
+  0x00 calldataload 0xe0 shr 0x41c0e1b5 eq // [ (cld_len == 4) (cld == kill) ]
+
+  // ** this must be followed by an address to push onto the stack
+  push20
+}
+
+// TODO: replace runtime_dest with a template or fix huff over-push on jumpdests
+#define macro PREFIX_TAIL = takes(4) returns(0) {
+  // [ (cld_len == 4) (cld == kill) killer ]
+
+  // check caller == killer
+  caller eq  // [ (cld_len == 4) (cld == kill) (caller == killer) ]
+
+  and and iszero  // [ not(is_valid_kill_call) ]
+  runtime_dest jumpi // [ runtime_dest ]
+  caller selfdestruct
+
+  runtime_dest:   // resume previously scheduled runtime activities
+  ///assert(stack_empty)
+}
+
+
+
+// // these seemingly useless macros are a huff arithmetic workaround
+// #define macro SIZE_KILL_PREFIX_HEAD = takes(0) returns(1) {
+//   __codesize(KILL_PREFIX_HEAD)
+// }
+
+// #define macro SIZE_KILL_PREFIX_TAIL = takes(0) returns(1) {
+//   __codesize(KILL_PREFIX_TAIL)
+// }
