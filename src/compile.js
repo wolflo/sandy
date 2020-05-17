@@ -1,6 +1,5 @@
 const path = require('path');
 const fs = require('fs'); const parser = require('./huff/src/parser');
-const compiler = require('./huff/src/compiler');
 
 const modulesPath = path.posix.resolve(__dirname, './huff_modules');
 const PLACEHOLDER_ADDR = '0xffffffffffffffffffffffffffffffffffffffff';
@@ -20,16 +19,24 @@ const prefixHead = parser.processMacro(
 
 const prefixTail = parser.processMacro(
   'PREFIX_TAIL',
-  lenBytes(prefixHead) + 20,  // modify jumpdests for prefixHead + address preceding
+  lenBytes(prefixHead) + 20,  // adjust jumpdests for prefixHead + address preceding
   [],
   prefixParsed.macros,
   prefixParsed.inputMap,
   prefixParsed.jumptables
 ).data.bytecode;
 
+if(lenBytes(prefixHead) > 31) {
+  throw 'ERR: prefix head size'
+}
+if(lenBytes(prefixTail) > 31) {
+  throw 'ERR: prefix tail size'
+}
+
+
 const sandyArgs = {
-  prefix_head: '0x' + prefixHead,
-  prefix_tail: '0x' + prefixTail,
+  prefix_head: `0x${prefixHead}`,
+  prefix_tail: `0x${prefixTail}`,
   prefix_head_len: toHex(lenBytes(prefixHead)),
   prefix_tail_len: toHex(lenBytes(prefixTail))
 }
@@ -68,8 +75,9 @@ function toHex(str) {
 }
 
 function trimBytes(str) {
-  if (str.length % 2 !== 0)
-    throw "ERR: These aint bytes"
+  if (str.length % 2 !== 0) {
+    throw 'ERR: These aint bytes'
+  }
   return str.replace(/^0x/,'')
 }
 

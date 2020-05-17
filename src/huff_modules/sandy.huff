@@ -3,67 +3,86 @@
 // stack: [ bottom top ]
 
 // huff TODOs:
-  // - bytes interpreted as opcodes if push > 32 bytes
+  // - hex data should not be silently interpreted as opcodes if > 32 bytes
   // - should push1 when jumpdest fits in a byte
   // - need a __PUSHBYTES(macro, ost) to push the code from a macro onto stack
   // - need outside of the bytecode asserts (e.g. if this macro changed length, don't compile)
   // - whitespace would be nice
-  // - order of operations in liteal arithmetic
+  // - order of operations in literal arithmetic
 
 // func_sig("sandyRuntime()")
 #define macro CALLBACK_SIG = takes(0) returns(1) { 0x799897e5 }
 
-// huff hack
-template <literal>
-#define macro PUSH_VAL = takes(0) returns(1) {
-  <literal>
-}
+// huff arithmetic hack
+template <val>
+#define macro PUSH_VAL = takes(0) returns(1) { <val> }
 
-template <throw_dst>
+template <throw_dest>
 #define macro CHECK_SUCCESS = takes(1) returns(0) {
   // [ call_success ]
-  iszero <throw_dst> jumpi
+  iszero <throw_dest> jumpi  // [ ]
 }
 
-// TODO: add offsets as we go rather than pushing
 template <prefix_head, prefix_tail, prefix_head_len, prefix_tail_len>
-#define macro MSTORE_PREFIX = takes(0) returns(1) {
-  // 0x6004361460003560e01c6341c0e1b51473  // head of kill prefix, 17 bytes
+#define macro MSTORE_PREFIX = takes(1) returns(1) {
+  // [ 00 ]
   <prefix_head> PUSH_VAL<8*32-8*prefix_head_len>() shl
-  0x00 mstore
+  dup2 mstore // mstore(0, prefix_head)
 
-  caller 0x60 shl // shift left 12 bytes (96 bits, 0x60)
+  caller 0x60 shl
   <prefix_head_len> mstore   // mstore caller at ost of end of prefix head
 
-  // 0x33141616156100305733ff5b  // tail of kill prefix, 12 bytes
-  // mstore // mstore prefix_tail at prefix_head_len + 20 byte address
+  // mstore prefix_tail at prefix_head_len + 20 byte address
   <prefix_tail> PUSH_VAL<8*32-8*prefix_tail_len>() shl
-  PUSH_VAL<prefix_head_len+20>() mstore
+  PUSH_VAL<prefix_head_len+20>() mstore // [ 00 ]
+}
+
+template <prefix_len>
+#define macro RUNTIME_CALL = takes(2) returns (3) {
+  // [ 00 prefix_len ]
+  // mstore(prefix_len, callback_sig)
+  CALLBACK_SIG() dup2 mstore  // [ 00 prefix_len ]
+
+  dup2 dup1 0x04              // [ 00 prefix_len 00 00 04 ]
+  PUSH_VAL<prefix_len+28>()   // [ 00 prefix_len 00 00 04 (prefix_len+28) ]
+  dup3 caller gas   // [ 00 prefix_len 00 00 04 (prefix_len + 28) 00 caller gas ]
+
+  // call(gas, addr, val, argOst, argLen, retOst, retLen)
+  call  // [ 00 prefix_len success ]
+}
+
+#define macro MSTORE_RETURNDATA = takes(2) returns(3) {
+  // [ 00 prefix_len ]
+  // returndatasize is cheaper than dup
+  returndatasize returndatasize // [ 00 prefix_len rtd_len rtd_len ]
+  dup4 dup4                     // [ 00 prefix_len rtd_len rtd_len 00 prefix_len ]
+  // returndatacopy(dstOst, ost, len)
+  returndatacopy  // [ 00 prefix_len rtd_len ]
 }
 
 template <prefix_head, prefix_head_len, prefix_tail, prefix_tail_len>
 #define macro MAIN = takes(0) returns(0) {
-  // mstore(key, value)
-  0x00 dup1 dup1 CALLBACK_SIG() dup2 mstore // [ 00 00 00 ]
-  0x04  0x1c // len(func_sig) (28 byte offset)
-  dup3 caller gas // [ 00 00 00 04 28 00 caller gas ]
-  call  // call(gas, addr, val, argOst, argLen, retOst, retLen)
+  // store prefix in memory starting at 0x00
+  0x00 MSTORE_PREFIX<prefix_head, prefix_tail, prefix_head_len, prefix_tail_len>()
 
-  // [ 00 success ]
-  CHECK_SUCCESS<throw_dst>() // [ 00 ]
+  // push memory offset to end of prefix
+  PUSH_VAL<prefix_head_len+prefix_tail_len+20>()     // [ 00 prefix_len ]
 
-  // store kill prefix
-  MSTORE_PREFIX<prefix_head, prefix_tail, prefix_head_len, prefix_tail_len>()
-  PUSH_VAL<prefix_head_len+prefix_tail_len+20>() // [ 00 prefix_len ]
+  // call back into caller for runtime bytecode
+  RUNTIME_CALL<prefix_head_len+prefix_tail_len+20>() // [ 00 prefix_len success ]
 
-  returndatasize dup1 dup4 dup4 // [ 00 prefix_len rtd_len rtd_len 00 prefix_len ]
-  // returndatacopy(dstOst, ost, len)(prefix_len, 00, rtd_len)
-  returndatacopy  // [ 00 prefix_len rtd_len ]
+  // revert if success == 0
+  CHECK_SUCCESS<throw_dest>() // [ 00 prefix_len ]
 
-  // [ (rtd_len + prefix_len) 00 ]
-  add swap1 return // return(ost, len)(prefix_len + rtd_len, 00)
+  // store returndata immediately after prefix in memory
+  MSTORE_RETURNDATA() // [ 00 prefix_len rtd_len ]
+
+  // return prefix and data returned from runtime call
+  add swap1           // [ (rtd_len + prefix_len) 00 ]
+  return    // return(ost, len)(prefix_len + rtd_len, 00)
+  // [ ]
 
   // [ 00 ]
-  throw_dst:
+  throw_dest:
     dup1 revert
 }
