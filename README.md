@@ -1,10 +1,9 @@
 # Sandy
-A sandbox for executing semi-trusted evm bytecode.
-Enables execution of arbitrary bytecode without jeopardizing a contract's storage.
+Sandy enables execution of arbitrary bytecode without jeopardizing a contract's storage.
 
-- no delegatecalls
-- keep a constant address
+- no `delegatecall`s
 - no tricky security requirements like reserving storage slots
+- keep a constant execution address
   
 Sandy is indeterminate init code.
 When deployed with create2, it calls back into the deploying contract with `sandyRuntime()` to get the runtime code.
