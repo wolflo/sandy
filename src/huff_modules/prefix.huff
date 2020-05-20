@@ -14,7 +14,7 @@
   0x04 calldatasize eq
 
   // check calldata == func_sig("kill()")
-  0x00 calldataload 0xe0 shr 0x41c0e1b5 eq // [ (cld_len == 4) (cld == kill) ]
+  0x00 calldataload KILL_SIG() 0xe0 shl eq  // [ (cld_len == 4) (cld == kill) ]
 
   // ** this must be followed by an address to push onto the stack
   push20
