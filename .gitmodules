@@ -1,4 +1,8 @@
 [submodule "huff"]
 	path = src/huff
-	url = git@github.com:wolflo/huff.git
+	url = https://github.com/wolflo/huff.git
 	branch = small-jumps
+[submodule "k-sandy"]
+	path = k-sandy
+	url = https://github.com/wolflo/k-sandy.git
+	branch = master
