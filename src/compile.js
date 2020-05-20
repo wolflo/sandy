@@ -3,7 +3,7 @@ const fs = require('fs');
 const parser = require('./huff/src/parser');
 
 const modulesPath = path.posix.resolve(__dirname, './huff_modules');
-const PLACEHOLDER_ADDR = '0x05a56e2d52c817161883f50c441c3228cfe54d9f';
+const PLACEHOLDER_ADDR = '0xffffffffffffffffffffffffffffffffffffffff';
 const OUT_PATH = '../out/';
 
 const prefixParsed = parser.parseFile('prefix.huff', modulesPath);
