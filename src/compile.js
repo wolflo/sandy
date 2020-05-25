@@ -61,6 +61,7 @@ console.log('len(PREFIX_HEAD) :', prefixHead.length / 2, 'bytes')
 console.log('PREFIX_HEAD      :', prefixHead, '\n')
 console.log('len(PREFIX_TAIL) :', prefixTail.length / 2, 'bytes')
 console.log('PREFIX_TAIL      :', prefixTail, '\n')
+console.log('len(PREFIX)      :', prefix.length / 2, 'bytes')
 
 console.log(`bytecode written to ${OUT_PATH}`);
 

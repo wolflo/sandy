@@ -82,7 +82,7 @@ template <prefix_head, prefix_head_len, prefix_tail, prefix_tail_len>
   return    // return(ost, len)(prefix_len + rtd_len, 00)
   // [ ]
 
-  // [ 00 ]
+  // [ 00 _ ]
   throw_dest:
-    dup1 revert
+    dup2 dup1 revert
 }

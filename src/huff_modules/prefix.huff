@@ -27,7 +27,7 @@
   caller eq           // [ (cld_len == 4) (cld == kill) (caller == killer) ]
 
   and and iszero      // [ not(is_valid_kill_call) ]
-  runtime_dest jumpi  // [ runtime_dest ]
+  runtime_dest jumpi  // [ not(is_valid_kill_call) runtime_dest ]
   caller selfdestruct
 
   runtime_dest:   // resume previously scheduled runtime activities
